@@ -1,8 +1,8 @@
 (function() {
 	let InputStream = {
-		input: "",
-		pos: 0,
-		length: 0,
+		input  : "",
+		pos    : 0,
+		length : 0,
 		new: function(input) {
 			this.input = input;
 			this.length = this.input.length;
@@ -29,11 +29,6 @@
 		eof: function() { return this.pos >= this.length; },
 	};
 
-	let Token = function(type, value) {
-		this.type = type;
-		this.value = value;
-	};
-
 	let Tokenizer = {
 		input: undefined,
 		tokens: [],
@@ -41,6 +36,7 @@
 			{ "oparen"  : '\\(' },
 			{ "cparen"  : '\\)' },
 			{ "integer" : '[0-9]+' },
+			{ "string"  : '\\".+\\"' },
 			{ "symbol"  : '[a-zA-Z0-9+=!^*]+' },
 		],
 		new: function(input) {
@@ -58,7 +54,7 @@
 					let matches = code.match(type.reg);
 					if (matches === null || matches.length <= 0) return;
 					this.input.skip(matches[0].length - 1);
-					this.tokens.push(new Token(type.name, matches[0]));
+					this.tokens.push({ type: type.name, value: matches[0] });
 					return true;
 				});
 			}
@@ -66,12 +62,8 @@
 		}
 	};
 
-	let ExprNode = function(car, cdr) {
-		this.car = car;
-		this.cdr = cdr;
-	};
-
 	let Parser = {
+		tokens: undefined,
 		new: function(tokens) {
 			this.tokens = tokens;
 			return this;
@@ -81,32 +73,46 @@
 		},
 		parse_expr: function() {
 			this.consume("oparen");
-			let car = this.parse_car();
-			let cdr = this.parse_cdrs();
+			let rator = this.parse_rator();
+			let rand = this.parse_rand();
 			this.consume("cparen");
-			return new ExprNode(car, cdr);
+			return { rator, rand };
 		},
-		parse_car: function() {
+		parse_rator: function() {
 			let peek = this.peek();
 			if (peek.type === "oparen") {
 				return this.parse_expr();
 			}
 			if (peek.type === "cparen") {
-				return 'nil';
+				return null;
 			}
-			return this.tokens.shift();
+			let token = this.tokens.shift();
+			return token.value;
 		},
-		parse_cdrs: function() {
+		parse_rand: function() {
 			let peek = this.peek();
-			let cdr = [];
+			let rands = [];
 			while (peek.type !== "cparen") {
 				let token = (peek.type === "oparen")
 						  ? this.parse_expr()
 						  : this.tokens.shift();
-				cdr.push(token);
+
+				let rand = token;
+
+				if (token.type !== undefined) {
+					if (token.type === "integer") {
+						rand = parseInt(token.value);
+					} else if (token.type === "string") {
+						rand = String(token.value);
+					} else if (token.type === "symbol") {
+						rand = token.value;
+					}
+				}
+
+				rands.push(rand);
 				peek = this.peek();
 			}
-			return cdr;
+			return rands;
 		},
 		peek: function(offset=0) {
 			let token = this.tokens[offset];
@@ -117,33 +123,80 @@
 		},
 		consume: function(typename) {
 			let token = this.tokens.shift();
-			if (token === undefined) {
-				throw(`Syntax Error: Expected '${typename}' but got undefined.`);
-			}
-			if (token.type !== typename) {
+			if (token === undefined || token.type !== typename) {
 				throw(`Syntax Error: Expected '${typename}' but got '${token.type}'.`);
 			}
 			return token;
-		},
-		skip: function(amount) {
-			this.tokens = this.tokens.slice(amount);
 		}
 	};
 
-	const code = "(+ 1 2)";
+	let Generator = {
+		tree: undefined,
+		new: function(tree) {
+			this.tree = tree;
+			return this;
+		},
+		generate: function() {
+			return this._generate(this.tree);
+		},
+		_generate: function(node) {
+			if (node instanceof Array && node.length > 0) {
+				let str = [];
+				for (let i = 0; i < node.length; i++) {
+					if (node[i] instanceof Object) {
+						str.push(this._generate(node[i]));
+					} else {
+						str.push(node[i]);
+					}
+				}
+				return str.map(s => String(s)).join(" ");
+			}
+
+			if (node instanceof Object && node.rator !== undefined && node.rand !== undefined) {
+				let str = "(" + this._generate(node.rator);
+				if (node.rand.length > 0) {
+					str += " " + this._generate(node.rand);
+				}
+				return str + ")";
+			}
+
+			return String(node);
+		}
+	};
+
+	let Interpreter = {
+		tree: undefined,
+		new: function(tree) {
+			this.tree = tree;
+			return this;
+		},
+		run: function() {
+			return this.execute_procedure(this.tree);
+		},
+		execute_procedure: function(node) {
+
+		}
+	};
+
+	// const code = "(+ 1 (+ 2 3))";
+	// const code = "((lambda (x) x) (+ 1 2))";
+	const code = "((lambda (x) x) (lambda (cons (a) (lambda (x y) (+ 1 (+ 1 2 (* 9121 3)))) (lambda (x) (* x 10)))))";
+	console.log("Raw:", code);
 
 	const is = InputStream.new(code);
-	// console.log(is);
+	console.log("Input:", is);
 
-	const tokenizer = Tokenizer.new(is);
-	// console.log(tokenizer);
+	const tokens = Tokenizer.new(is).tokenize();
+	console.log("Tokens:", tokens);
 
-	const tokens = tokenizer.tokenize();
-	// console.log(tokens);
+	const tree = Parser.new(tokens).parse();
+	console.log("Parser:", tree);
 
-	const parser = Parser.new(tokens);
+	const gen = Generator.new(tree).generate();
+	console.log("Generated:", gen);
+	console.log("Starting: ", code);
+	console.log("Matching:", gen === code);
 
-	const tree = parser.parse();
-
-	console.log(tree);
+	// const result = Interpreter.new(tree).run();
+	// console.log("interp:", result);
 })();
