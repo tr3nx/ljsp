@@ -11,7 +11,7 @@
 		read: function(amount=1, offset=0) {
 			if (this.pos+offset >= this.length) return "";
 			if (offset > 0) this.skip(offset);
-			return [...Array(amount).keys()].map(_ => this.next()).join("");
+			return Array(amount).keys().map(_ => this.next()).join("");
 		},
 		top: function() {
 			let output = this.input.substr(this.pos++);
@@ -30,14 +30,14 @@
 	};
 
 	let Tokenizer = {
-		input: undefined,
-		tokens: [],
-		tokenTypes: [
+		input      : undefined,
+		tokens     : [],
+		tokenTypes : [
 			{ "oparen"  : '\\(' },
 			{ "cparen"  : '\\)' },
 			{ "integer" : '[0-9]+' },
 			{ "string"  : '\\".+\\"' },
-			{ "symbol"  : '[a-zA-Z0-9+=!^*]+' },
+			{ "symbol"  : '[a-zA-Z0-9+=!^%*-/]+' },
 		],
 		new: function(input) {
 			this.input = input;
@@ -46,7 +46,6 @@
 		tokenize: function() {
 			while ( ! this.input.eof()) {
 				let code = this.input.top();
-
 				this.tokenTypes.map(type => { return {
 					name: Object.keys(type)[0],
 					reg: new RegExp(`^(${Object.values(type)[0]})`, 'gi')
@@ -63,7 +62,7 @@
 	};
 
 	let Parser = {
-		tokens: undefined,
+		tokens : undefined,
 		new: function(tokens) {
 			this.tokens = tokens;
 			return this;
@@ -131,7 +130,7 @@
 	};
 
 	let Generator = {
-		tree: undefined,
+		tree : undefined,
 		new: function(tree) {
 			this.tree = tree;
 			return this;
@@ -164,23 +163,57 @@
 		}
 	};
 
-	let Interpreter = {
-		tree: undefined,
+	let Evaluator = {
+		tree : undefined,
 		new: function(tree) {
 			this.tree = tree;
 			return this;
 		},
 		run: function() {
-			return this.execute_procedure(this.tree);
+			return this.evaluate(this.tree);
 		},
-		execute_procedure: function(node) {
+		evaluate: function(node) {
+			if (node.rator === "lambda") {
+				node.rator = this.lambda(node.rand[0], node.rand[1]);
+			}
 
-		}
+			if (node.rand !== undefined && node.rand.length > 0) {
+				let args = [];
+				for (let i = 0; i < node.rand.length; i++) {
+					let n = node.rand[i];
+					if (n instanceof Object) {
+						args.push(this.evaluate(n));
+					} else {
+						args.push(n);
+					}
+				}
+				node.rand = args;
+			}
+			return this.procedure(this.evaluate(node.rator), this.evaluate(node.rand));
+		},
+		procedure: function(rator, rand) {
+			if (rator instanceof Function) {
+				return rator(rand);
+			}
+			return this[rator](rand);
+		},
+		lambda: function(argnames, body) {
+			console.log('lambda', body);
+			return function(args) {
+				console.log('inside', body);
+				body.rand = args;
+				return this.evaluate(body);
+			};
+		},
+		'+': function(args) { return args.reduce((a, b) => a += b); },
+		'-': function(args) { return args.reduce((a, b) => a -= b); },
+		'*': function(args) { return args.reduce((a, b) => a *= b); },
+		'/': function(args) { return args.reduce((a, b) => b /= a); },
+		'%': function(args) { return args.reduce((a, b) => a %  b); }
 	};
 
-	// const code = "(+ 1 (+ 2 3))";
-	// const code = "((lambda (x) x) (+ 1 2))";
-	const code = "((lambda (x) x) (lambda (cons (a) (lambda (x y) (+ 1 (+ 1 2 (* 9121 3)))) (lambda (x) (* x 10)))))";
+	// const code = "(+ 1 (/ 2 18))";
+	const code = "((lambda (x y) (% x y)) 5 35)";
 	console.log("Raw:", code);
 
 	const is = InputStream.new(code);
@@ -197,6 +230,6 @@
 	console.log("Starting: ", code);
 	console.log("Matching:", gen === code);
 
-	// const result = Interpreter.new(tree).run();
-	// console.log("interp:", result);
+	const result = Evaluator.new(tree).run();
+	console.log("Eval:", result);
 })();
