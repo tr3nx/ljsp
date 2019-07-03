@@ -42,15 +42,41 @@ let Tokenizer = (reader, types) => {
 let Parser = (tokens) => {
 	return {
 		parse: function() {
-			return this.expr();
-		},
-		expr: function() {
 			if (this.peek("oparen")) {
-				this.consume("oparen");
-				return this.expr();
+				return this.parse_expr();
 			}
-			
-			// return { proc : this.consume("symbol"), args : this.expr() };
+
+			if (this.peek("integer")) {
+				return Number(this.consume("integer").value);
+			}
+
+			if (this.peek("string")) {
+				return String(this.consume("string").value);
+			}
+
+			return this.consume("symbol").value;
+		},
+		parse_expr: function() {
+			this.consume("oparen");
+			if (this.peek("oparen")) {
+				return this.parse();
+			}
+
+			let proc = {
+				name : this.consume("symbol").value,
+				args : this.parse_args()
+			};
+
+			this.consume("cparen");
+
+			return proc;
+		},
+		parse_args : function() {
+			let args = [];
+			while ( ! this.peek("cparen")) {
+				args.push(this.parse());
+			}
+			return args;
 		},
 		peek: function(expected, offset=0) {
 			return tokens[offset].type === expected;
@@ -65,7 +91,8 @@ let Parser = (tokens) => {
 	};
 };
 
-const code = "(+ 12 18)";
+const code = '((lambda (x) x) 6)';
+// const code = "(+ 12 18)";
 // const code = "((lambda (x y) (% x y)) 5 35)";
 console.log("Raw:", code);
 
@@ -76,7 +103,7 @@ const tokens = Tokenizer(reader, [
 	{ "oparen"  : '\\(' },
 	{ "cparen"  : '\\)' },
 	{ "integer" : '[0-9]+' },
-	// { "string"  : '\\".+\\"' },
+	{ "string"  : '\\"[^\"]*\\"' },
 	{ "symbol"  : '[a-zA-Z0-9+=!^%*-/]+' }
 ]);
 console.log("Tokens:", tokens);
