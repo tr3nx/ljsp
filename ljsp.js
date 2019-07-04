@@ -34,14 +34,11 @@ let Tokenizer = (reader, types) => {
 			let match = code.match(new RegExp(`^(${Object.values(type)[0]})`));
 			if (match === null || match.length <= 1) return;
 			reader.skip(match[match.length - 1].length);
-
 			type = Object.keys(type)[0];
-
 			let value = match[match.length - 1];
 			if (type === "integer") {
 				value = Number(parseFloat(value));
 			}
-
 			tokens.push({ type, value });
 			return true;
 		});
@@ -91,9 +88,7 @@ let Parser = (tokens) => {
 			}
 
 			this.consume("cparen");
-
 			let body = this.parse_expr();
-
 			this.consume("cparen");
 
 			return { type: "lambda", argvars: argvars, body: body };
@@ -123,7 +118,6 @@ let Parser = (tokens) => {
 
 			let quoted = [];
 			let depth = 0;
-
 			while (true) {
 				if (this.peek() === "cparen" && depth === 0) break;
 				if (this.peek() === "oparen") depth++;
@@ -134,8 +128,8 @@ let Parser = (tokens) => {
 			this.consume("cparen");
 
 			quoted = quoted.join(" ")
-						.replace(new RegExp("\\(\\s"), '(')
-						.replace(new RegExp("\\s\\)"), ')');
+					.replace(new RegExp("\\(\\s"), '(')
+					.replace(new RegExp("\\s\\)"), ')');
 
 			return { type: "quote", quoted: quoted };
 		},
@@ -160,12 +154,10 @@ let Generator = (tree) => {
 		},
 		_generate: function(tree) {
 			let code = "";
-
 			if (tree.type !== undefined) {
-				let type = tree.type;
-				if (type === "procedure") {
+				if (tree.type === "procedure") {
 					code += this.generate_procedure(tree.func, tree.args);
-				} else if (type === "quote") {
+				} else if (tree.type === "quote") {
 					code += this.generate_quote(tree.quoted);
 				} else {
 					code += this.generate_lambda(tree.argvars, tree.body);
@@ -175,31 +167,26 @@ let Generator = (tree) => {
 			} else {
 				code += tree;
 			}
-
 			return code;
 		},
-		generate_procedure: function(func, args) {
-			let _args = [];
-
+		generate_procedure: function(rator, args) {
+			let rand = [];
 			for (let i = 0; i < args.length; i++) {
 				let arg = args[i];
 				if (arg.type !== undefined) {
-					_args.push(this._generate(args[i]));
+					rand.push(this._generate(args[i]));
 				} else {
-					_args.push(args[i]);
+					rand.push(args[i]);
 				}
 			}
 
-			let proc = _args.map(String).join(" ");
-
-			if (func instanceof Object) {
-				func = this._generate(func);
+			if (rator instanceof Object) {
+				rator = this._generate(rator);
 			}
  
-			return "(" + func + " " + proc + ")";
+			return "(" + rator + " " + rand.map(String).join(" ") + ")";
 		},
 		generate_lambda: function(argvars, body) {
-			// (lambda (x) (- 2 (+ 3 x)))
 			return "(lambda (" + argvars.map(String) + ") " + this._generate(body) + ")";
 		},
 		generate_quote: function(quoted) {
@@ -252,23 +239,23 @@ let Evaluator = (tree) => {
 			}
 			return ret;
 		},
-		print   : (str) => str.join(),
-		abs     : (int) => Math.abs(int),
-		expt    : (args) => args.reduce((a, b) => Math.pow(a, b)),
-		'+'     : (args) => args.reduce((a, b) => a += b),
-		'-'     : (args) => args.reduce((a, b) => a -= b),
-		'*'     : (args) => args.reduce((a, b) => a *= b),
-		'/'     : (args) => args.reduce((a, b) => a /= b),
-		'%'     : (args) => args.reduce((a, b) => a %  b),
+		print : (str)  => str.join(),
+		abs   : (num)  => Math.abs(num),
+		expt  : (args) => args.reduce((a, b) => Math.pow(a, b)),
+		'+'   : (args) => args.reduce((a, b) => a += b),
+		'-'   : (args) => args.reduce((a, b) => a -= b),
+		'*'   : (args) => args.reduce((a, b) => a *= b),
+		'/'   : (args) => args.reduce((a, b) => a /= b),
+		'%'   : (args) => args.reduce((a, b) => a %  b),
 	};
 };
 
 // const code = "42";
 // const code = '"testing"';
-const code = "(abs (- 61 (+ 12 (* 2 18) (+ 50 5))))";
-// const code = '(loop (+ (/ 12 4) (* 2 (- (% 5 3) 1))) (print "testing"))';
 // const code = "(quote +)";
 // const code = "(+ 1.1 5.1)";
+const code = "(abs (- 61 (+ 12 (* 2 18) (+ 50 5))))";
+// const code = '(loop (+ (/ 12 4) (* 2 (- (% 5 3) 1))) (print "testing"))';
 // const code = "(abs ((lambda (x) (- 2 (+ 3 x))) (+ 1 (* 4 (* 2 (- (* 5 2) 5))))))";
 // const code = '(loop (abs ((lambda (x) (+ x 10)) (quote 32))) (print "hello ljsp"))';
 console.log("Raw:", code);
